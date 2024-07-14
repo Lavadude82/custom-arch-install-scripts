@@ -1,0 +1,40 @@
+#!/bin/zsh
+if [ "$1" = "--help" ] || [ -z "$1" ]; then
+    echo "fmis <device>"
+    echo
+    echo "<device>: /dev/sda /dev/mmcblk0 /dev/nvme0"
+    echo "Make sure device is unmounted!"
+    exit 0
+fi
+if [ -f "$1" ]; then
+    echo "Does Not Exist!"
+    exit 0
+fi
+if [ $(ping -q -c1 google.com &>/dev/null && echo online || echo offline) = "offline" ]; then
+    echo "No Internet!"
+    exit 1
+fi
+echo -e "o\nw\n" | sudo fdisk "$1"
+echo -e "gpt\nn\n1\n\n+256M\nn\n2\n\n\nt\n1\nEFI System\nt\n2\nLinux fylesystem\nw\n" | sudo fdisk "$1"
+
+sd=$(echo "$1" | grep "sd" -o)
+dpn="$1"
+if [ "$sd" != "sd" ]; then
+    dpn="$dpn""p"
+fi
+echo -e "y" | sudo mkfs.ext4 "$dpn""2"
+echo -e "y" | sudo mkfs.fat -F32 "$dpn""1"
+sudo mount "$dpn""2" /mnt
+sudo mount --mkdir "$dpn""1" /mnt/boot
+echo -e "y\n" | sudo pacstrap -K /mnt base linux-lts
+arch-chroot /mnt pacman -Syu --needed --noconfirm networkmanager sudo nano sof-firmware linux-firmware git base-devel grub intel-ucode amd-ucode wget efibootmgr
+genfstab -U /mnt >>/mnt/etc/fstab
+echo -e "[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /mnt/etc/pacman.conf
+arch-chroot /mnt mkinitcpio -P
+arch-chroot /mnt systemctl enable NetworkManager
+arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="/boot" --bootloader-id="Arch Linux"
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+clear
+arch-chroot /mnt echo "Type a password for root. If failed, type 'passwd root'."
+arch-chroot /mnt passwd root
+arch-chroot /mnt 
