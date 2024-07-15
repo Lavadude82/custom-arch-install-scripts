@@ -1,0 +1,50 @@
+#!/bin/zsh
+if [ "$1" = "--help" ] || [ -z "$1" ]; then
+    echo "fmis <device> <username>"
+    echo
+    echo "<device>: /dev/sda /dev/mmcblk0 /dev/nvme0"
+    echo "Make sure device is unmounted!"
+    echo "<username>: optional, creates user with username"
+    exit 0
+fi
+if [ ! -b $1 ]; then
+    echo "Device Does Not Exist!"
+    exit 0
+fi
+if [ $(ping -q -c1 google.com &>/dev/null && echo online || echo offline) = "offline" ]; then
+    echo "No Internet!"
+    exit 1
+fi
+echo -e "o\nw\n" | fdisk "$1"
+echo -e "gpt\nn\n1\n\n+256M\nn\n2\n\n\nt\n1\nEFI System\nt\n2\nLinux fylesystem\nw\n" | fdisk "$1"
+
+sd=$(echo "$1" | grep "sd" -o)
+dpn="$1"
+if [ "$sd" != "sd" ]; then
+    dpn="$dpn""p"
+fi
+echo -e "y" | mkfs.ext4 "$dpn""2"
+echo -e "y" | mkfs.fat -F32 "$dpn""1"
+mount "$dpn""2" /mnt
+mount --mkdir "$dpn""1" /mnt/boot
+echo -e "y\n" | pacstrap -K /mnt base linux-lts
+arch-chroot /mnt pacman -Syu --needed --noconfirm networkmanager nano linux-firmware git base-devel grub intel-ucode amd-ucode wget efibootmgr dosfstools bluez-utils bluez inetutils neofetch
+genfstab -U /mnt >>/mnt/etc/fstab
+echo -e "[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /mnt/etc/pacman.conf
+arch-chroot /mnt mkinitcpio -P
+arch-chroot /mnt systemctl enable NetworkManager
+arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="/boot" --bootloader-id="Arch Linux"
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+clear
+arch-chroot /mnt echo "Type a password for root. If failed, type 'passwd root'."
+arch-chroot /mnt passwd root
+arch-chroot /mnt echo "root-arch" > /etc/hostname
+if [ ! -z "$2" ]; then
+arch-chroot /mnt echo "$2-arch" > /etc/hostname
+arch-chroot /mnt useradd -m "$2"
+arch-chroot /mnt echo "Type a password for '$2'. If failed, type 'passwd $2'."
+arch-chroot /mnt passwd "$2"
+fi
+echo "You may do additional configuration."
+echo -e "You may reboot and unplug the USB once the screen is off.\nIn BIOS, you may need to select 'Arch Linux' as the first bootable device/ID."
+arch-chroot /mnt 
