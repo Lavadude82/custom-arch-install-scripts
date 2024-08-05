@@ -1,4 +1,8 @@
+# WARNING
 All of these install scripts use `linux-lts`
+
+# Info
+You need to format and mount the drive yourself.
 
 # Shortened Links
 https://tinyurl.com/arch-kde-install  
